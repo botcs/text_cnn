@@ -54,7 +54,8 @@ class trainer():
         return step, loss, acc    
     
     def eval_step(self, sess, step, writer=None):
-        loss, acc = sess.run([self.loss, self.acc])
+        loss, acc = sess.run(
+            [self.loss, self.acc], {self.model.keep_prob : 1.0})
         
         if writer:
             writer.add_summary(self.test_summ_op.eval(), step)
