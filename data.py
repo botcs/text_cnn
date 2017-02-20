@@ -150,7 +150,7 @@ def load_data(data_fname):
     Returns split sentences and labels.
     '''
     # Load data from files
-    examples = list(open(FLAGS.data_dir + data_fname, "r").readlines())
+    examples = list(open(data_fname, "r").readlines())
     
     examples = [s.strip() for s in examples]
     
@@ -189,7 +189,7 @@ def main(argv=None):
 
     
     print('2. TOKENIZE - ', end='', flush=True)
-    tokenized_context = load_data('context.txt')
+    tokenized_context = load_data(os.path.join(FLAGS.data_dir,'context.txt'))
     
 
 
@@ -321,6 +321,9 @@ if __name__ == '__main__':
 else:
     global vocabulary_size
     global num_classes
+    
+    if not os.path.exists(FLAGS.data_dir):
+        main()
     
     vocab = tf.contrib.learn.preprocessing.VocabularyProcessor.restore(
             os.path.join(FLAGS.data_dir, 'context.vocab'))

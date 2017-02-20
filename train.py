@@ -12,7 +12,7 @@ flags = tf.app.flags
 flags.DEFINE_integer('train_steps', 100, 'Number of batches to train a new model on [100]')
 flags.DEFINE_string('optimizer', 'adam', 'Optimizer used to decrease the loss function. Default is adam [adam | sgd]')
 flags.DEFINE_float('learning_rate', 0.001, 'Learning rate to train the network with [0.001]')
-flags.DEFINE_string('checkpoint_file', '/tmp/model.ckpt', 'If file exists, then the loaded model is trained. Else a new model will be trained and saved [./checkpoints/model.ckpt]')
+flags.DEFINE_string('checkpoint_file', '/tmp/model.ckpt', 'If file exists, then the loaded model is trained. Else a new model will be trained and saved [/tmp/model.ckpt]')
 FLAGS = flags.FLAGS
 
 
@@ -57,7 +57,7 @@ class trainer():
         loss, acc = sess.run([self.loss, self.acc])
         
         if writer:
-            writer.add_summary(self.summ_op.eval(), step)
+            writer.add_summary(self.test_summ_op.eval(), step)
             
         return loss, acc
     
@@ -151,7 +151,8 @@ class trainer():
         # Evaluation summaries for TensorBoard
         test_loss_summary = tf.summary.scalar('test_loss', self.loss)
         test_acc_summary = tf.summary.scalar('test_accuracy', self.acc)
-        summ_op = tf.summary.merge([test_loss_summary, test_acc_summary])
+        self.test_summ_op = tf.summary.merge(
+            [test_loss_summary, test_acc_summary])
         
 
 def main(argv=None):
