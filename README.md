@@ -49,8 +49,9 @@ It is slightly simplified implementation of Kim's [Convolutional Neural Networks
 ![](./img/tb-reader.png)
 
 # References
-
+- **Yoon Kim's [github repo](https://github.com/yoonkim/CNN_sentence)**
 - **Denny's blog post on [text classification](http://www.wildml.com/2015/12/implementing-a-cnn-for-text-classification-in-tensorflow/)**
+- **Suriya Deepan blog post on preprocessing [Cornell Data](http://suriyadeepan.github.io/2016-06-28-easy-seq2seq/)**
 - [A Sensitivity Analysis of (and Practitioners' Guide to) Convolutional Neural Networks for Sentence Classification](http://arxiv.org/abs/1510.03820)
 - [Indico blog post on Protobufs and Queues](https://indico.io/blog/tensorflow-data-inputs-part1-placeholders-protobufs-queues/)
 
