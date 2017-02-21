@@ -12,7 +12,7 @@ flags = tf.app.flags
 flags.DEFINE_integer('train_steps', 100, 'Number of batches to train a new model on [100]')
 flags.DEFINE_string('optimizer', 'adam', 'Optimizer used to decrease the loss function. Default is adam [adam | sgd]')
 flags.DEFINE_float('learning_rate', 0.001, 'Learning rate to train the network with [0.001]')
-flags.DEFINE_string('checkpoint_file', '/tmp/model.ckpt', 'If file exists, then the loaded model is trained. Else a new model will be trained and saved [/tmp/model.ckpt]')
+
 FLAGS = flags.FLAGS
 
 
@@ -27,15 +27,6 @@ FLAGS._parse_flags()
 
 
 class trainer():
-        
-    def load_maybe(self, model_path, sess):
-        if os.path.isfile(model_path+'.index'):
-            tf.train.Saver().restore(sess, model_path)
-            print('Model loaded from', model_path)
-            return True
-        else:
-            print('Model not found, training new model')
-            return False
         
     def save(self, model_path, sess):
         if os.path.isfile(model_path):
@@ -75,7 +66,7 @@ class trainer():
             
             
             self.writer = tf.summary.FileWriter(FLAGS.log_dir, sess.graph)
-            self.load_maybe(checkpoint_file, sess)
+            self.model.load_maybe(sess)
             step = start_step = self.global_step.eval()
             
             try:
@@ -97,7 +88,6 @@ class trainer():
             coord.join(threads)
         
     def evaluate(self,
-        checkpoint_file=FLAGS.checkpoint_file,
         eval_steps=FLAGS.train_steps):
         sum_loss = 0
         sum_acc = 0
@@ -105,7 +95,7 @@ class trainer():
             coord = tf.train.Coordinator()
             sess.run(tf.global_variables_initializer())
             threads = tf.train.start_queue_runners(sess=sess, coord=coord)
-            if not self.load_maybe(checkpoint_file, sess):
+            if not self.model.load_maybe(sess):
                 self.train()
                 
             step = start_step = self.global_step.eval()
@@ -141,7 +131,7 @@ class trainer():
         
         # Accuracy
         total = FLAGS.batch_size * data.num_classes
-        missed = tf.reduce_sum(tf.abs(self.model.y - tf.round(self.model.pred)))
+        missed = tf.reduce_sum(tf.abs(self.model.y - self.model.pred))
         self.acc = (total - missed) / total
     
         # (Train) Summaries for TensorBoard
@@ -150,10 +140,13 @@ class trainer():
         self.summ_op = tf.summary.merge([self.loss_summary, self.acc_summary])
         
         # Evaluation summaries for TensorBoard
+        self.output_hist = tf.summary.histogram('output', self.model.y)
         test_loss_summary = tf.summary.scalar('test_loss', self.loss)
         test_acc_summary = tf.summary.scalar('test_accuracy', self.acc)
         self.test_summ_op = tf.summary.merge(
-            [test_loss_summary, test_acc_summary])
+            [self.output_hist, test_loss_summary, test_acc_summary])
+            
+            
         
 
 def main(argv=None):
@@ -167,7 +160,7 @@ if __name__ == '__main__':
     print('Running train.py')
     print('\nParameters:')
     for attr, value in sorted(FLAGS.__flags.items()):
-        print('{}={}'.format(attr.upper(), value))
+        print('{} =\t{}'.format(attr.upper(), value))
     print('')
     print('checking DATA_DIR')
     if os.path.exists(FLAGS.data_dir):

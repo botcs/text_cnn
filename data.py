@@ -13,7 +13,7 @@ flags = tf.app.flags
 flags.DEFINE_integer('min_seq_len', 3, 'Minimal length of dialogs [3]')
 flags.DEFINE_integer('max_seq_len', 50, 'Maximal length of dialogs [50]')
 flags.DEFINE_integer('min_freq', 3, 'Keep word in vocabulary only if occurs at least N times [3]')
-flags.DEFINE_string('data_dir', './data/', 'Data directory [./data/]')
+flags.DEFINE_string('data_dir', '/tmp/data/', 'Data directory [/tmp/data/]')
 flags.DEFINE_string('url', 'http://www.mpi-sws.org/~cristian/data/cornell_movie_dialogs_corpus.zip', 'Default URL to download corpus from, if DATA_DIR not found')
 flags.DEFINE_boolean('corpus_correction', True, 'Correct erroneus lines in corpus before preprocess [True]')
 
@@ -122,7 +122,6 @@ def clean_str(string):
     Tokenization/string cleaning for all datasets except for SST.
     Original taken from https://github.com/yoonkim/CNN_sentence/blob/master/process_data.py
     '''
-    global line_counter
     string = re.sub(r"[^A-Za-z0-9(),!?\'\`]", " ", string)
     string = re.sub(r"\'s", " \'s", string)
     string = re.sub(r"\'ve", " \'ve", string)
@@ -144,20 +143,26 @@ def clean_str(string):
     return string.strip().lower()
 
 
-def load_data(data_fname):
+def tokenize_data(examples):
     '''
     Decoder data from files, splits the data into words and generates labels.
     Returns split sentences and labels.
     '''
-    # Load data from files
-    examples = list(open(data_fname, "r").readlines())
-    
     examples = [s.strip() for s in examples]
     
     # Split by words
     tokenized_text = [clean_str(sent) for sent in examples]
     
     return tokenized_text
+
+def translate_single(input):
+    assert(type(input) == str)
+    tokenized = tokenize_data([input])
+    idx = np.array(list(cont_vocab.transform(tokenized)))
+    idx = np.trim_zeros(idx[0])
+    return np.array([idx])
+
+    
 
 def main(argv=None):
     if os.path.exists(FLAGS.data_dir):
@@ -189,16 +194,24 @@ def main(argv=None):
 
     
     print('2. TOKENIZE - ', end='', flush=True)
-    tokenized_context = load_data(os.path.join(FLAGS.data_dir,'context.txt'))
     
-
-
+    
+    # Load data from files
+    # data_fname = os.path.join(FLAGS.data_dir,'context.txt')
+    # examples = list(open(data_fname, "r").readlines())
+    
+    tokenized_context = tokenize_data(contexts)
     
     lens = [len(line.split()) for line in tokenized_context]
     normlen_context = []
     normlen_genres = []
     lens = [len(line.split()) for line in tokenized_context]
     for i in range(len(tokenized_context)):
+        # Dataset is very biased
+        # Also guessing 24 categories on a few words is still ill proposed
+        # heavy regularization
+        # if 'drama' in genres[i]: continue
+        
         if lens[i] > FLAGS.min_seq_len and lens[i] < FLAGS.max_seq_len:
             normlen_context.append(tokenized_context[i])
             normlen_genres.append(genres[i])
@@ -215,6 +228,10 @@ def main(argv=None):
         x = np.array(list(vocab_processor.fit_transform(text)))
         
         return x, vocab_processor
+
+    global cont_vocab
+    global genr_vocab    
+
     cont_id, cont_vocab = vocabularize(normlen_context)
     genr_id, genr_vocab = vocabularize(normlen_genres)
     print('vocabulary size:', len(cont_vocab.vocabulary_))
@@ -314,22 +331,26 @@ if __name__ == '__main__':
     print('Running data.py')
     print('\nParameters:')
     for attr, value in sorted(FLAGS.__flags.items()):
-        print('{}={}'.format(attr.upper(), value))
+        print('{} =\t{}'.format(attr.upper(), value))
     print('')
     
     tf.app.run()
-else:
+else:    
+    global cont_vocab
+    global genr_vocab    
+
+
     global vocabulary_size
     global num_classes
     
     if not os.path.exists(FLAGS.data_dir):
         main()
     
-    vocab = tf.contrib.learn.preprocessing.VocabularyProcessor.restore(
+    cont_vocab = tf.contrib.learn.preprocessing.VocabularyProcessor.restore(
             os.path.join(FLAGS.data_dir, 'context.vocab'))
-    vocabulary_size = len(vocab.vocabulary_)
+    vocabulary_size = len(cont_vocab.vocabulary_)
 
-    vocab = tf.contrib.learn.preprocessing.VocabularyProcessor.restore(
+    genr_vocab = tf.contrib.learn.preprocessing.VocabularyProcessor.restore(
         os.path.join(FLAGS.data_dir, 'genre.vocab'))
     #-1 ~ UNK token
-    num_classes = len(vocab.vocabulary_) - 1
+    num_classes = len(genr_vocab.vocabulary_) - 1

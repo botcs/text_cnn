@@ -15,11 +15,13 @@ flags.DEFINE_integer('max_pool', 3, 'K strongest activations are selected of eac
 flags.DEFINE_string('hidden_size', '50, 30', 'Width of classifier fully connected layers. Use comma separated integers ["50, 30"]')
 flags.DEFINE_float('keep_prob', 0.5, 'Probability of keeping an activation value after the DROPOUT layer, during training [0.5]')
 flags.DEFINE_string('log_dir', '/tmp/log', 'Logs will be saved to this directory')
-
+flags.DEFINE_string('checkpoint_file', '/tmp/model.ckpt', 'If file exists, then the loaded model is trained. Else a new model will be trained and saved [/tmp/model.ckpt]')
 FLAGS = flags.FLAGS
 FLAGS._parse_flags()
 
 import data
+
+model_collector = []
 
 class model():
     def get_reader(self, batch_size):
@@ -141,10 +143,41 @@ class model():
         # logits for cross-entropy
         logits = tf.contrib.layers.fully_connected(
             h, num_classes, activation_fn=None, scope='output_layer')    
-        y_pred = tf.sigmoid(logits)
+        y_ = tf.sigmoid(logits)
+        pred = tf.round(y_)
         
-        return logits, y_pred, keep_prob
+        return logits, y_, pred, keep_prob
+
+
+    def load_maybe(self, sess, model_path=FLAGS.checkpoint_file):
+        if os.path.isfile(model_path+'.index'):
+            tf.train.Saver().restore(sess, model_path)
+            print('Model loaded from', model_path)
+            return True
+        else:
+            print('Model not found, training new model')
+            return False
+            
+
+    def get_single_pred(self, input, sess=None):
+        # if sess is passed, it must have initialized variables        
+        if not sess:
+            sess = tf.Session()
+            self.load_maybe(sess)
         
+        translated = data.translate_single(input)
+        
+        # Not very sophisticated, but embed requires a variable dimension
+        # Which is held for variable length sequences
+        # While batch size is fix
+        
+        translated = np.tile(translated,(FLAGS.batch_size,1))
+        p = sess.run(self.y_, {self.input : translated})[0]
+        max_id = np.argsort(p)[::-1]
+        max_p = p[max_id]
+            
+        return list(zip(max_id, max_p))
+
     def __init__(self,
         batch_size=FLAGS.batch_size,
         embedding_size=FLAGS.embedding_size,
@@ -156,6 +189,7 @@ class model():
         
         
         print('Graph initialization...')
+        global model_collector
         # using variable scope, for cleaner TensorBoard representation
         
         with tf.variable_scope('reader'):
@@ -175,11 +209,11 @@ class model():
             print('3. Feature Extractors')
 
         with tf.variable_scope('classifier'):
-            self.logits, self.pred, self.keep_prob = self.get_classifier(
-                self.feature, hidden, keep_prob_default)
+            self.logits, self.y_, self.pred, self.keep_prob =\
+                self.get_classifier(self.feature, hidden, keep_prob_default)
             print('4. Classifier')
             
-             
+        model_collector.append(self)     
 
 def main(argv=None):
 
@@ -206,7 +240,7 @@ if __name__ == '__main__':
     print('Running model.py')
     print('\nParameters:')
     for attr, value in sorted(FLAGS.__flags.items()):
-        print('{}={}'.format(attr.upper(), value))
+        print('{} =\t{}'.format(attr.upper(), value))
     print('')
     print('checking DATA_DIR')
     if os.path.exists(FLAGS.data_dir):
