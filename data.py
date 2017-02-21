@@ -207,24 +207,25 @@ def main(argv=None):
     normlen_genres = []
     lens = [len(line.split()) for line in tokenized_context]
     for i in range(len(tokenized_context)):
-        # Dataset is very biased
+        # Dataset is very biased, some genres are over/under represented
         # Also guessing 24 categories on a few words is still ill proposed
         # heavy regularization
         # if 'drama' in genres[i]: continue
+        
         
         if lens[i] > FLAGS.min_seq_len and lens[i] < FLAGS.max_seq_len:
             normlen_context.append(tokenized_context[i])
             normlen_genres.append(genres[i])
     print('longest dialog:', FLAGS.max_seq_len, 
         '- shortest dialog:', FLAGS.min_seq_len)
-
+    
 
     print('3. VOCABULARIZE - ', end='', flush=True)
     VocProc = tf.contrib.learn.preprocessing.VocabularyProcessor
-    def vocabularize(text):
+    def vocabularize(text, min_frequency=FLAGS.min_freq):
         max_document_length = max([len(x.split(" ")) for x in text])
         vocab_processor = VocProc(
-            max_document_length, min_frequency=FLAGS.min_freq)
+            max_document_length, min_frequency)
         x = np.array(list(vocab_processor.fit_transform(text)))
         
         return x, vocab_processor
@@ -233,14 +234,14 @@ def main(argv=None):
     global genr_vocab    
 
     cont_id, cont_vocab = vocabularize(normlen_context)
-    genr_id, genr_vocab = vocabularize(normlen_genres)
+    genr_id, genr_vocab = vocabularize(normlen_genres, min_frequency=0)
     print('vocabulary size:', len(cont_vocab.vocabulary_))
 
     print('4. CREATE GENRE LABELS')
     genr_labels = np.zeros((len(genr_id), genr_id.max()+1), dtype=int)
     for i, gid in enumerate(genr_id):
-        # first row is UNK token
-        genr_labels[i, gid] = True
+        # first column is UNK token
+        genr_labels[i, gid] = 1
 
     genr_labels = genr_labels[:, 1:]
     
@@ -249,8 +250,25 @@ def main(argv=None):
     vocabulary_size = len(cont_vocab.vocabulary_)
     num_classes = len(genr_vocab.vocabulary_) - 1 
 
+    print('5. REGULARIZATION')
+    reg_idx = []
+    gen_count = np.zeros(num_classes)
+    for idx in range(len(genr_labels)):
+        # print(genr_labels[idx])
+        if genr_labels[idx].sum() == 0: continue
+        if gen_count[genr_labels[idx] == 1].max() < 10000:
+            gen_count[genr_labels[idx] == 1] += 1
+            reg_idx.append(idx)
+        if gen_count[genr_labels[idx] == 1].min() < 5000:
+            gen_count[genr_labels[idx] == 1] += 1
+            reg_idx.append(idx)
+                    
+    print(gen_count)
+    cont_id = cont_id[reg_idx]
+    genr_labels = genr_labels[reg_idx]
+    
 
-    print('5. SAVE DATA')
+    print('6. SAVE DATA')
     cont_vocab.save(os.path.join(FLAGS.data_dir, 'context.vocab'))
     genr_vocab.save(os.path.join(FLAGS.data_dir, 'genre.vocab'))
     np.save(os.path.join(FLAGS.data_dir, 'context'), cont_id)
